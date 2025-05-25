@@ -10,6 +10,6 @@ WiFi password: 1234567890\
 DO NOT use the ESP32 USB connector to power the motors, it's for programming only.\
 
 Turcotronics, License GPL Version 3\
-https://www.turcotronics.it\
-https://www.turcotronics.com\
-https://www.ebay.it/usr/turcotronics\
+https://www.turcotronics.it \
+https://www.turcotronics.com \
+https://www.ebay.it/usr/turcotronics \
