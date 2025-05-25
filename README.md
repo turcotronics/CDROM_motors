@@ -7,7 +7,7 @@ Typical CDROM motors are 2 pins 5V DC.\
 Absolute position in based on time, so it isn't precise, return backward to zeros.\
 WiFi ssid: CDROM_motors\
 WiFi password: 1234567890\
-DO NOT use the ESP32 USB connector to power the motors, it's for programming only.\
+DO NOT use the ESP32 USB connector to power the motors, it's for programming only.
 
 Turcotronics, License GPL Version 3\
 https://www.turcotronics.it \
