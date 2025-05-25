@@ -1,5 +1,5 @@
 # CDROM_motors
-CDROM motors controller with ESP32 DevKitC_V4 and firmware for Arduino IDE and HTLM websocket.\
+CDROM motors controller with ESP32 DevKitC_V4 and firmware for Arduino IDE and HTLM websocket, the software can be esily adapted to different ESP32 boards.\
 It uses the motors from an old CDROM with its mechanic assembly.\
 It can be controlled by a smartphone, tablet or PC connecting it to its WiFi web server port 80 IP 192.168.4.1 or use websockets to port 81.\
 If you need the hardware maybe there are still some on my https://www.ebay.it/usr/turcotronics or just use any ESP32 board with a 2 motors driver.\
