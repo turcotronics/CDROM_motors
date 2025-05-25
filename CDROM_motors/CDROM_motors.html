@@ -1,0 +1,478 @@
+<!-- CDROM_motors Ver. 1.4
+Turcotronics, License GPL Version 3
+https://www.turcotronics.it
+https://www.turcotronics.com
+https://www.ebay.it/usr/turcotronics
+You can connects directly to port 80 IP 192.168.4.1 or use websockets port 81
+The used board is the ESP32 DevkitC V4 but can be easily adapted to any ESP32 board
+2 motors, IR Tx/Rx sensor, WS2812 RGB LED
+Check out it on https://www.ebay.it/usr/turcotronics or you your own one.
+Use:
+   WebSockets by Markus Sattler
+   Freenove WS2812 Lib for ESP32 by Freenove
+Absolute position in based on time, so it isn't precise, return backward to zeros.
+DO NOT use the ESP32 USB connector to power the motors, it's just for programming -->
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8" />
+<title>CDROM_motors</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+	html {font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: left;}
+	.button {background-color: #4CAF50; border: none; color: white; padding: 10px 20px;
+          text-decoration: none; font-size: 18px; margin: 2px; cursor: pointer;}
+    .input2 { background-color: #4CAFF0; color: black; padding: 8px 10px; width: 30px;
+              text-decoration: none; font-size: 18px; margin: 2px; cursor: pointer;}
+</style>
+</head>
+
+<script language="javascript" type="text/javascript">
+
+var url = "ws://192.168.4.1:81/";
+var canvasConnection;
+var contextConnection;
+var canvasStopStatus;
+var contextStopStatus;
+var canvasMotorLin;
+var contextMotorLin;
+var canvasMotorRot;
+var contextMotorRot;
+var canvasOptiSense;
+var contextOptiSense;
+var connected=0;
+
+//____________________________
+//Commands:
+// LF linear motor forward
+// LB linear motor backward
+// LS linear motor stop
+// RF rotative motor forward
+// RB rotative motor backward
+// RS rotative motor stop
+// Pn linear motor percentance
+// Wn led WRGB
+
+//____________________________
+//Status xyz:
+// x=0 no stop condition
+// x=1 end stop (backward)
+// x=2 forward time stop
+// y=0 linear motor in stop
+// y=1 linear motor forward
+// y=2 linear motor backward
+// z=0 rotatory motor in stop
+// z=1 rotatory motor forward
+// z=2 rotatory motor backward
+// x=P yz=percentance of linear motor position
+// x=S y=optical sensor
+//   y=0 OFF
+//   y=1 ON
+// x=W y=Led WRGB
+
+//__________________________________
+//function timerPeriodic() {
+//}
+
+//__________________________________
+// This is called when the page finishes loading
+function init() {
+    // Assign page elements to variables
+    canvasConnection = document.getElementById("connectionCanvas");
+    canvasStopStatus = document.getElementById("stopStatusCanvas");
+    canvasMotorLin = document.getElementById("motorLinCanvas");
+    canvasMotorRot = document.getElementById("motorRotCanvas");
+    canvasOptiSense = document.getElementById("optiSenseCanvas");
+    
+    document.getElementById("text").innerHTML = "";
+    document.getElementById("data").innerHTML = "";
+    document.getElementById("stopStatus").innerHTML = "";
+    document.getElementById("motorLinStatus").innerHTML = "";
+    document.getElementById("motorRotStatus").innerHTML = "";
+    
+    // Draw circle in canvas connectionCanvas
+    contextConnection = canvasConnection.getContext("2d");
+    contextConnection.arc(25, 25, 15, 0, Math.PI * 2, false);
+    contextConnection.lineWidth = 3;
+    contextConnection.strokeStyle = "black";
+    contextConnection.stroke();
+    contextConnection.fillStyle = "red";
+    contextConnection.fill();
+    
+    // Draw circle in canvas stopStatusCanvas
+    contextStopStatus = stopStatusCanvas.getContext("2d");
+    contextStopStatus.arc(25, 25, 15, 0, Math.PI * 2, false);
+    contextStopStatus.lineWidth = 3;
+    contextStopStatus.strokeStyle = "black";
+    contextStopStatus.stroke();
+    contextStopStatus.fillStyle = "white";
+    contextStopStatus.fill();
+    
+    // Draw circle in canvas motorLinCanvas
+    contextMotorLin = canvasMotorLin.getContext("2d");
+    contextMotorLin.arc(25, 25, 15, 0, Math.PI * 2, false);
+    contextMotorLin.lineWidth = 3;
+    contextMotorLin.strokeStyle = "black";
+    contextMotorLin.stroke();
+    contextMotorLin.fillStyle = "white";
+    contextMotorLin.fill();
+    
+    // Draw circle in canvas motorRotCanvas
+    contextMotorRot = canvasMotorRot.getContext("2d");
+    contextMotorRot.arc(25, 25, 15, 0, Math.PI * 2, false);
+    contextMotorRot.lineWidth = 3;
+    contextMotorRot.strokeStyle = "black";
+    contextMotorRot.stroke();
+    contextMotorRot.fillStyle = "white";
+    contextMotorRot.fill();
+    
+    // Draw circle in canvas canvasOptiSense
+    contextOptiSense = canvasOptiSense.getContext("2d");
+    contextOptiSense.arc(25, 25, 15, 0, Math.PI * 2, false);
+    contextOptiSense.lineWidth = 3;
+    contextOptiSense.strokeStyle = "black";
+    contextOptiSense.stroke();
+    contextOptiSense.fillStyle = "white";
+    contextOptiSense.fill();
+        
+    // Connect to WebSocket server
+    wsConnect(url);
+    
+    //setInterval(timerPeriodic, 5000);
+}
+
+//__________________________________
+// Call this to connect to the WebSocket server
+function wsConnect(url) {
+    
+    // Connect to WebSocket server
+    websocket = new WebSocket(url);
+    
+    // Assign callbacks
+    websocket.onopen = function(evt) { onOpen(evt) };
+    websocket.onclose = function(evt) { onClose(evt) };
+    websocket.onmessage = function(evt) { onMessage(evt) };
+    websocket.onerror = function(evt) { onError(evt) };
+}
+
+//__________________________________
+// Called when a WebSocket connection is established with the server
+function onOpen(evt) {
+
+    // Log connection state
+    document.getElementById("text").innerHTML = "";
+    document.getElementById("data").innerHTML = "Connected";
+    console.log("Connected");
+    
+    contextConnection.fillStyle = "green";
+    contextConnection.fill();
+    
+    connected=1;
+    
+    //location.reload();
+}
+
+//__________________________________
+// Called when the WebSocket connection is closed
+function onClose(evt) {
+
+    // Log disconnection state
+    document.getElementById("text").innerHTML = "";
+    document.getElementById("data").innerHTML = "Disconnected";
+    console.log("Disconnected");
+    
+    contextConnection.fillStyle = "red";
+    contextConnection.fill();
+    contextStopStatus.fillStyle = "white";
+    contextStopStatus.fill();
+    contextMotorLin.fillStyle = "white";
+	contextMotorLin.fill();
+	contextMotorRot.fillStyle = "white";
+	contextMotorRor.fill();
+	contextOptiSense.fillStyle = "white";
+	contextOptiSense.fill();
+	document.getElementById("text").innerHTML = "";
+    document.getElementById("data").innerHTML = "";
+    document.getElementById("stopStatus").innerHTML = "";
+    document.getElementById("motorLinStatus").innerHTML = "";
+    document.getElementById("motorRotStatus").innerHTML = "";
+    
+    connected=0;
+    
+    //location.reload();
+    
+    // Try to reconnect after a few seconds
+    setTimeout(function() { wsConnect(url) }, 2000);
+}
+
+//__________________________________
+function UpdateMotorsStatus(evt)
+{
+	var msg = event.data;
+		
+	 //Update linear motor
+    switch(msg.charAt(1)) {
+		case "0":
+			contextMotorLin.fillStyle = "red";
+			contextMotorLin.fill();
+			document.getElementById("motorLinStatus").innerHTML = "Stop";
+			break;
+		case "1":
+			contextMotorLin.fillStyle = "green";
+			contextMotorLin.fill();
+			document.getElementById("motorLinStatus").innerHTML = "Forward";
+			break;
+		case "2":
+			contextMotorLin.fillStyle = "yellow";
+			contextMotorLin.fill();
+			document.getElementById("motorLinStatus").innerHTML = "Backward";
+			break;
+        default:
+            break;
+    }
+    //Update rotary motor
+    switch(msg.charAt(2)) {
+		case "0":
+			contextMotorRot.fillStyle = "red";
+			contextMotorRot.fill();
+			document.getElementById("motorRotStatus").innerHTML = "Stop";
+			break;
+		case "1":
+			contextMotorRot.fillStyle = "green";
+			contextMotorRot.fill();
+			document.getElementById("motorRotStatus").innerHTML = "Forward";
+			break;
+		case "2":
+			contextMotorRot.fillStyle = "yellow";
+			contextMotorRot.fill();
+			document.getElementById("motorRotStatus").innerHTML = "RoBackward";
+			break;
+        default:
+            break;
+    }
+}
+
+//__________________________________
+// Called when a message is received from the server
+function onMessage(evt) {
+	
+	var msg = event.data;
+	
+    // Print out our received message
+    document.getElementById("text").innerHTML = "Received: ";
+    document.getElementById("data").innerHTML = msg;
+    console.log("Received: " + msg);
+    
+    // Update Status
+    switch(msg.charAt(0)) {
+		case "0":
+			contextStopStatus.fillStyle = "green";
+			contextStopStatus.fill();
+			document.getElementById("stopStatus").innerHTML = "No stop";
+			UpdateMotorsStatus(evt);
+			break;
+		case "1":
+			contextStopStatus.fillStyle = "red";
+			contextStopStatus.fill();
+			document.getElementById("stopStatus").innerHTML = "End stop";
+			UpdateMotorsStatus(evt);
+			break;
+		case "2":
+			contextStopStatus.fillStyle = "red";
+			contextStopStatus.fill();
+			document.getElementById("stopStatus").innerHTML = "Time stop";
+			UpdateMotorsStatus(evt);
+			break;
+		case "P"://MotorLin position
+		document.getElementById("motorLinPos").innerHTML = msg.charAt(1)+msg.charAt(2)+msg.charAt(3)+"%";
+		break;
+		case "S"://Sensors
+		if(msg.charAt(1)=='0')
+		{
+			contextOptiSense.fillStyle = "red";
+			contextOptiSense.fill();
+			document.getElementById("optiSenseStatus").innerHTML = "OFF";
+		}
+		else
+		{
+			contextOptiSense.fillStyle = "green";
+			contextOptiSense.fill();
+			document.getElementById("optiSenseStatus").innerHTML = "ON";
+		}
+		break;
+		case "W":
+		break;
+        default:
+            break;
+    }
+}
+
+//__________________________________
+// Called when a WebSocket error occurs
+function onError(evt) {
+    document.getElementById("text").innerHTML = "Error: ";
+    document.getElementById("data").innerHTML = evt.data;
+    console.log("Error: " + evt.data);
+}
+
+//__________________________________
+// Sends a message to the server (and prints it to the console)
+function doSend(message) {
+	if(connected==1)
+	{
+		document.getElementById("text").innerHTML = "Sending: ";
+		document.getElementById("data").innerHTML = message;
+		websocket.send(message);
+		console.log("Sending: " + message);
+	}
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorLinF() {
+	doSend("LF");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorLinB() {
+	doSend("LB");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorLinS() {
+	doSend("LS");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorRotF() {
+	doSend("RF");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorRotB() {
+	doSend("RB");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressMotorRotS() {
+	doSend("RS");
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressGo() {
+	doSend("P"+document.getElementById("MotorLinPerc").value);
+}
+
+//__________________________________
+// Called whenever the HTML button is pressed
+function onPressLedGo() {
+	doSend("W"+rgb2hex(document.getElementById("LedW").value,
+		   document.getElementById("LedR").value,
+		   document.getElementById("LedG").value,
+		   document.getElementById("LedB").value));
+}
+
+//__________________________________
+function rgb2hex(w,r,g,b) {
+    if (r !== undefined)
+        return (Number(0x100000000+w*0x1000000+r*0x10000+g*0x100+b*0x1).toString(16).substring(1));
+    else
+        return Number(0x100000000+w[0]*0x1000000+w[1]*0x10000+w[2]*0x100+w[3]*0x1).toString(16).substring(1);
+}
+
+//__________________________________
+// Call the init function as soon as the page loads
+window.addEventListener("load", init, false);
+
+window.onload = function() {
+	var name = localStorage.getItem('MotorLinPerc');if (name !== null) document.getElementById("MotorLinPerc").value=name;
+	var name = localStorage.getItem('LedW');if (name !== null) document.getElementById("LedW").value=name;
+	var name = localStorage.getItem('LedR');if (name !== null) document.getElementById("LedR").value=name;
+	var name = localStorage.getItem('LedG');if (name !== null) document.getElementById("LedG").value=name;
+	var name = localStorage.getItem('LedB');if (name !== null) document.getElementById("LedB").value=name;
+	}
+window.onbeforeunload = function() {
+	localStorage.setItem('MotorLinPerc', document.getElementById("MotorLinPerc").value);
+	localStorage.setItem('LedW', document.getElementById("LedW").value);
+	localStorage.setItem('LedR', document.getElementById("LedR").value);
+	localStorage.setItem('LedG', document.getElementById("LedG").value);
+	localStorage.setItem('LedB', document.getElementById("LedB").value);
+	}
+
+</script>
+
+<!-- _________________________________________________ -->
+<h2>CDROM_motors</h2>
+Ver. 1.4 <a href="https://www.turcotronics.it">www.turcotronics.it</a>
+<a href="https://www.ebay.it/usr/turcotronics"> - eBay Shop</a>
+<table>
+	<tr>
+        <td>Connection</td>
+        <td><canvas id="connectionCanvas" width="50" height="50"></canvas></td>
+        <td><span id="text"> </span></td>
+        <td><span id="data"></span></td>
+    </tr>
+	<tr>
+        <td>EndStop</td>
+        <td><canvas id="stopStatusCanvas" width="50" height="50"></canvas></td>
+        <td><span id="stopStatus"></span></td>
+    </tr>
+	<tr>
+        <td>MotorLin</td>
+        <td><canvas id="motorLinCanvas" width="50" height="50"></canvas></td>
+        <td><span id="motorLinStatus"></span></td>
+        <td><span id="motorLinPos"></span></td>
+    </tr>
+    <tr>
+        <td>MotorRot</td>
+        <td><canvas id="motorRotCanvas" width="50" height="50"></canvas></td>
+        <td><span id="motorRotStatus"></span></td>
+    </tr>
+    <tr>
+        <td>OptiSense</td>
+        <td><canvas id="optiSenseCanvas" width="50" height="50"></canvas></td>
+        <td><span id="optiSenseStatus"></span></td>
+    </tr>
+</table>
+<table>
+	<tr>
+		<td>Led%</td>
+    </tr>
+    <tr>
+        <td>W<input class="input2" id="LedW" type="text" size="4"></td>
+        <td>R<input class="input2" id="LedR" type="text" size="4"></td>
+        <td>G<input class="input2" id="LedG" type="text" size="4"></td>
+        <td>B<input class="input2" id="LedB" type="text" size="4"></td>
+		<td><button class="button" id="LedSet" onclick="onPressLedGo()">Go!</button></td>
+    </tr>
+</table>
+<table>
+    <tr>
+		<td>MotorLin</td>
+    </tr>
+    <tr>
+        <td><button class="button" id="motorLinForward" onclick="onPressMotorLinF()">Forward</button></td>
+        <td><button class="button" id="motorLinBackward" onclick="onPressMotorLinB()">Backward</button></td>
+        <td><button class="button" id="motorLinStop" onclick="onPressMotorLinS()">Stop</button></td>
+    </tr>
+    <tr>
+		<td>Go to %</td>
+        <td><input class="input2" id="MotorLinPerc" type="text" size="4"></td>
+		<td><button class="button" id="MotorLinSet" onclick="onPressGo()">Go!</button></td>
+    </tr>
+    <tr>
+		<td>MotorRot</td>
+     </tr>
+    <tr>
+        <td><button class="button" id="motorRotForward" onclick="onPressMotorRotF()">Forward</button></td>
+        <td><button class="button" id="motorRotBackward" onclick="onPressMotorRotB()">Backward</button></td>
+        <td><button class="button" id="motorRotStop" onclick="onPressMotorRotS()">Stop</button></td>
+    </tr>
+</table>
+
+</html>
